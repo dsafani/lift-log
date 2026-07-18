@@ -24,7 +24,7 @@
   input{font-family:'IBM Plex Mono',monospace}
 
   /* ---------- header ---------- */
-  header{padding:18px 16px 12px;border-bottom:3px solid var(--red);position:relative;overflow:hidden}
+  header{padding:calc(18px + env(safe-area-inset-top)) 16px 12px;border-bottom:3px solid var(--red);position:relative;overflow:hidden}
   header::after{content:"";position:absolute;right:-40px;top:-40px;width:140px;height:140px;
     background:repeating-linear-gradient(45deg,var(--red) 0 8px,transparent 8px 20px);
     opacity:.25;transform:rotate(8deg);}
@@ -33,7 +33,7 @@
   h1{font-weight:900;font-variation-settings:'wdth' 72;font-size:38px;line-height:.92;
     text-transform:uppercase;letter-spacing:.01em}
   h1 .r{color:var(--red)}
-  .week-box{position:absolute;right:14px;top:20px;border:2px solid var(--paper);
+  .week-box{position:absolute;right:14px;top:calc(20px + env(safe-area-inset-top));border:2px solid var(--paper);
     padding:8px 12px;font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:14px;
     background:var(--ink);z-index:2}
 
@@ -153,12 +153,12 @@
   .viewtoggle button.on{background:var(--paper);color:var(--ink);font-weight:600}
   body.deckmode{position:fixed;inset:0;overflow:hidden;display:flex;flex-direction:column;padding-bottom:0}
   /* --- compact chrome: give the card the screen --- */
-  body.deckmode header{padding:10px 16px 8px;border-bottom-width:2px}
+  body.deckmode header{padding:calc(10px + env(safe-area-inset-top)) 16px 8px;border-bottom-width:2px}
   body.deckmode header::after{display:none}
   body.deckmode .kicker{display:none}
   body.deckmode h1{font-size:21px;line-height:1;display:inline-block}
   body.deckmode h1 br{display:none}
-  body.deckmode .week-box{top:7px;right:12px;padding:5px 10px;font-size:12px}
+  body.deckmode .week-box{top:calc(7px + env(safe-area-inset-top));right:12px;padding:5px 10px;font-size:12px}
   body.deckmode .cycle{padding:8px 16px 2px;gap:5px}
   body.deckmode .slot{padding:5px 8px 4px;min-width:60px}
   body.deckmode .slot .cat{display:none}
@@ -233,7 +233,7 @@
     font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:19px;min-width:96px;text-align:center}
   .timer.idle{background:var(--panel-2);color:var(--bone-dim)}
   .timer small{display:block;font-size:8px;letter-spacing:.2em;font-weight:400}
-  .flash{position:fixed;top:14px;left:50%;transform:translateX(-50%) rotate(-2deg);
+  .flash{position:fixed;top:calc(14px + env(safe-area-inset-top));left:50%;transform:translateX(-50%) rotate(-2deg);
     background:var(--gold);color:var(--ink);font-family:'IBM Plex Mono',monospace;font-weight:600;
     font-size:11px;letter-spacing:.14em;padding:6px 14px;z-index:50;display:none}
   .storage-line{text-align:center;font-family:'IBM Plex Mono',monospace;font-size:9px;
@@ -956,7 +956,7 @@ function buildBrief(){
   sw.children[0].addEventListener('click',function(){ state.view='list'; saveState(); renderAll(); });
   brief.appendChild(sw);
   brief.appendChild(el('<div class="swipehint">SWIPE \u2190 FOR EXERCISE 1</div>'));
-  brief.appendChild(el('<div class="storage-line briefstore">STORAGE: '+storageMode+' \u00b7 V14</div>'));
+  brief.appendChild(el('<div class="storage-line briefstore">STORAGE: '+storageMode+' \u00b7 V15</div>'));
   return brief;
 }
 function renderDeck(){
@@ -1177,7 +1177,7 @@ window.addEventListener&&window.addEventListener('resize',function(){
 });
 function renderAll(){ applyViewMode(); renderCycle(); renderLedger(); renderWeeks(); renderViewToggle(); renderPrimer(); renderCards(); }
 detectStorage(function(){
-  document.getElementById('storageLine').textContent='STORAGE: '+storageMode+' · V14';
+  document.getElementById('storageLine').textContent='STORAGE: '+storageMode+' · V15';
   loadState(function(s){
     if(s){ state=normalizeState(s); }
     seedHistoryOnce();
