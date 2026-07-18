@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta name="theme-color" content="#17130E">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -65,6 +65,8 @@
   .ledger{padding:10px 16px 0;font-family:'IBM Plex Mono',monospace;font-size:10.5px;
     color:var(--bone-dim);letter-spacing:.05em}
   .ledger .lhead{font-size:9px;letter-spacing:.2em;color:#6E6350;margin-bottom:4px}
+  .ledger .lheadbtn{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:.16em;
+    color:var(--bone-dim);border:1px solid #3A3226;padding:7px 12px;margin-bottom:6px;text-align:left}
   .ledger .lrow{display:flex;gap:10px;padding:2.5px 0;align-items:center}
   .ledger .lrow .ok{color:var(--gold)}
   .ledger .lrow .sk{color:#E08A7E}
@@ -171,13 +173,13 @@
   body.deckmode .srow{margin-bottom:6px}
   body.deckmode .srow input{padding:11px 10px;font-size:16px}
   body.deckmode .srow .chk{height:42px}
-  body.deckmode .foot{padding:6px 16px 8px}
+  body.deckmode .foot{padding:6px 16px calc(10px + env(safe-area-inset-bottom))}
   body.deckmode .quota{font-size:9px}
   body.deckmode .qbar{height:6px;margin-top:4px}
   body.deckmode .footrow{margin-top:6px}
   body.deckmode .fbtn{padding:6px 9px;font-size:9.5px}
   body.deckmode .timer{padding:6px 12px;font-size:16px;min-width:84px}
-  body.deckmode .slide{padding-bottom:112px}
+  body.deckmode .slide{padding-bottom:calc(128px + env(safe-area-inset-bottom))}
   body.deckmode .briefw,body.deckmode .briefd{display:inline-block;font-size:24px;margin-right:10px}
   body.deckmode #wkSel,body.deckmode #phaseBox,body.deckmode #viewToggle,
   body.deckmode #gapNote,body.deckmode #ledger,body.deckmode #primerMount,
@@ -199,7 +201,7 @@
     scrollbar-width:none}
   .deckscroll::-webkit-scrollbar{display:none}
   .slide{flex:0 0 100%;width:100%;scroll-snap-align:start;scroll-snap-stop:always;
-    overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:150px}
+    overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:calc(150px + env(safe-area-inset-bottom))}
   .slide .card{margin:4px 16px 0}
   .card.brief{background:transparent;border:none;padding:6px 0 0}
   .briefw{font-weight:900;font-variation-settings:'wdth' 72;font-size:36px;line-height:.95;text-transform:uppercase}
@@ -219,7 +221,7 @@
     letter-spacing:.22em;color:var(--bone-dim);margin-top:26px}
   /* ---------- footer ---------- */
   .foot{position:fixed;left:0;right:0;bottom:0;background:var(--ink);border-top:3px solid var(--red);
-    padding:10px 16px 14px;z-index:10}
+    padding:10px 16px calc(14px + env(safe-area-inset-bottom));z-index:10}
   .quota{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:.14em;color:var(--bone-dim)}
   .qbar{height:9px;background:var(--panel-2);margin-top:6px;position:relative;overflow:hidden}
   .qbar i{position:absolute;left:0;top:0;bottom:0;background:repeating-linear-gradient(
@@ -733,8 +735,14 @@ function renderCycle(){
 
 function buildLedgerBox(){
   if(!state.sessions.length) return null;
+  var open=!!state.ledgerOpen;
   var L=el('<div class="ledger"></div>');
-  L.appendChild(el('<div class="lhead">PUNCH CARD \u2014 LAST '+Math.min(5,state.sessions.length)+'</div>'));
+  var head=el('<button class="lheadbtn">PUNCH CARD \u00b7 '+state.sessions.length+' \u00a0'+(open?'\u25be':'\u25b8')+'</button>');
+  head.addEventListener('click',function(){
+    state.ledgerOpen=!state.ledgerOpen; saveState(); renderAll();
+  });
+  L.appendChild(head);
+  if(!open) return L;
   var shown=state.sessions.slice(-5).reverse();
   shown.forEach(function(s,ix){
     var realIdx=state.sessions.length-1-ix;
@@ -948,7 +956,7 @@ function buildBrief(){
   sw.children[0].addEventListener('click',function(){ state.view='list'; saveState(); renderAll(); });
   brief.appendChild(sw);
   brief.appendChild(el('<div class="swipehint">SWIPE \u2190 FOR EXERCISE 1</div>'));
-  brief.appendChild(el('<div class="storage-line briefstore">STORAGE: '+storageMode+' \u00b7 V10</div>'));
+  brief.appendChild(el('<div class="storage-line briefstore">STORAGE: '+storageMode+' \u00b7 V14</div>'));
   return brief;
 }
 function renderDeck(){
@@ -1080,6 +1088,45 @@ document.getElementById('restoreFile').addEventListener('change',function(e){
 });
 
 /* ================= BOOT ================= */
+/* history repair + seed:
+   - removes fast-forward SKIP stamps from the setup period (on/before Jul 18)
+   - lays down completed history: Pull A 7/15, Push A 7/17, Legs A (Quad Quota) 7/17
+   - fills W1 Push A + Legs A logs with the actual numbers from his screenshots */
+function seedLog(day,ex,arr){
+  var k='1|'+day+'|'+ex+'|main';
+  var cur=state.log[k];
+  if(cur && cur.some(function(s){ return s&&s.done; })) return; /* never clobber real logs */
+  state.log[k]=arr.map(function(a){ return {w:a[0],r:a[1],done:true}; });
+}
+function seedHistoryOnce(){
+  if(state.seedV2) return;
+  state.seedV2=true; state.seededHistory=true;
+  /* drop setup-period skips and any earlier seed attempt */
+  state.sessions=state.sessions.filter(function(s){
+    if(s.seeded) return false;
+    if(s.skipped && s.date<='2026-07-18') return false;
+    return true;
+  });
+  /* completed history (skip if a real completed entry already exists for the day) */
+  [['2026-07-15','pullA'],['2026-07-17','pushA'],['2026-07-17','legsA']].forEach(function(t){
+    var exists=state.sessions.some(function(s){ return s.day===t[1] && !s.skipped; });
+    if(!exists) state.sessions.push({day:t[1],date:t[0],week:1,skipped:false,seeded:true});
+  });
+  /* chronological order, stable ties — keeps legsA as the tail so NEXT = PULL B */
+  state.sessions=state.sessions.map(function(s,i){ s.__i=i; return s; })
+    .sort(function(a,b){ return a.date<b.date?-1:a.date>b.date?1:a.__i-b.__i; })
+    .map(function(s){ delete s.__i; return s; });
+  /* W1 logs from the screenshots */
+  seedLog('pushA','sa1',[[225,8],[225,8],[225,8]]);
+  seedLog('pushA','sa2',[[90,8],[75,10],[75,10]]);
+  seedLog('legsA','la1',[[180,8],[180,8],[180,8],[180,8]]);
+  seedLog('legsA','la2',[[270,10],[270,10],[270,10]]);
+  seedLog('legsA','la3',[[20,10],[20,10]]);
+  seedLog('legsA','la4',[[100,12],[100,10]]);
+  seedLog('legsA','la5',[[85,12],[85,12],[85,12]]);
+  seedLog('legsA','la6',[[290,10],[290,10],[290,10],[290,10],[290,10]]);
+  saveState();
+}
 var toastT=null, toastUndoFn=null;
 function showToast(msg, undoFn){
   var t=document.getElementById('toast');
@@ -1130,9 +1177,15 @@ window.addEventListener&&window.addEventListener('resize',function(){
 });
 function renderAll(){ applyViewMode(); renderCycle(); renderLedger(); renderWeeks(); renderViewToggle(); renderPrimer(); renderCards(); }
 detectStorage(function(){
-  document.getElementById('storageLine').textContent='STORAGE: '+storageMode+' · V10';
+  document.getElementById('storageLine').textContent='STORAGE: '+storageMode+' · V14';
   loadState(function(s){
     if(s){ state=normalizeState(s); }
+    seedHistoryOnce();
+    /* open on the NEXT day — unless a session is in progress today */
+    var tail=lastSession();
+    if(!(tail && tail.day===state.day && tail.date===todayISO() && !tail.skipped)){
+      state.day=nextUp();
+    }
     renderAll();
   });
 });
