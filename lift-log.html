@@ -488,7 +488,7 @@ var PROGRAM = {
   ]}
 };
 
-var CYCLE = ['pullA','pushA','legsA','REST','pullB','pushB','legsB','REST'];
+var CYCLE = ['pushA','pullA','legsA','REST','pushB','pullB','legsB','REST'];
 
 var PHASES = [
   {weeks:[1,2], name:'CLOCK IN', note:'2–3 reps in reserve. Log every baseline weight. On a cut, strength is the scoreboard — these are the numbers you defend for 8 weeks.'},
@@ -544,7 +544,7 @@ function flashSaved(){
 }
 
 /* ================= STATE ================= */
-var state={ week:1, day:'pullA', log:{}, primer:{}, variant:{}, extra:{}, last:{}, sessions:[], view:'deck', deckPos:{} };
+var state={ week:1, day:'pushA', log:{}, primer:{}, variant:{}, extra:{}, last:{}, sessions:[], view:'deck', deckPos:{} };
 
 function phaseFor(w){
   for(var i=0;i<PHASES.length;i++) if(PHASES[i].weeks.indexOf(w)>=0) return PHASES[i];
@@ -632,12 +632,20 @@ function projection(){
   }
   return {dates:out,lastIdx:lastIdx};
 }
+var RECENT_DAYS=4; /* a day trained this recently has had its slot served this rotation */
 function nextUp(){
   var tail=lastSession();
-  if(!tail) return 'pullA';
+  if(!tail) return 'pushA';
   var i=CYCLE.indexOf(tail.day);
-  for(var s=1;s<=CYCLE.length;s++){ var c=CYCLE[(i+s)%CYCLE.length]; if(c!=='REST') return c; }
-  return 'pullA';
+  var today=parseISO(todayISO());
+  for(var s=1;s<=CYCLE.length;s++){
+    var c=CYCLE[(i+s)%CYCLE.length];
+    if(c==='REST') continue;
+    var lat=latestFor(c);
+    if(lat && !lat.skipped && dayDiff(parseISO(lat.date),today)<RECENT_DAYS) continue;
+    return c;
+  }
+  return 'pushA';
 }
 function restEarned(){
   var tail=lastSession();
@@ -678,7 +686,7 @@ function buildICS(){
 function el(html){ var d=document.createElement('div'); d.innerHTML=html; return d.firstElementChild; }
 function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
 function normalizeState(s){
-  var base={ week:1, day:'pullA', log:{}, primer:{}, variant:{}, extra:{}, last:{}, sessions:[], view:'deck', deckPos:{} };
+  var base={ week:1, day:'pushA', log:{}, primer:{}, variant:{}, extra:{}, last:{}, sessions:[], view:'deck', deckPos:{} };
   if(!s||typeof s!=='object') return base;
   for(var k in base){ if(s[k]===undefined) s[k]=base[k]; }
   if(Object.prototype.toString.call(s.sessions)!=='[object Array]') s.sessions=[];
@@ -694,7 +702,7 @@ function normalizeState(s){
   }
   if(s.view!=='deck'&&s.view!=='list') s.view='deck';
   if(!s.deckPos||typeof s.deckPos!=='object') s.deckPos={};
-  if(!PROGRAM[s.day]) s.day='pullA';
+  if(!PROGRAM[s.day]) s.day='pushA';
   if(!(s.week>=1&&s.week<=8)) s.week=1;
   return s;
 }
@@ -706,14 +714,22 @@ function renderCycle(){
   CYCLE.forEach(function(c,i){
     var sub='';
     if(c==='REST'){
-      if(pr.dates[i]) sub=WD[pr.dates[i].getDay()];
+      /* if the day before this rest was completed this rotation, the rest day
+         is simply the day after it — not next rotation's projected slot */
+      var prevC=CYCLE[(i-1+CYCLE.length)%CYCLE.length];
+      var prevLatest=latestFor(prevC);
+      if(prevLatest && !prevLatest.skipped && dayDiff(parseISO(prevLatest.date),today)<=5){
+        sub=WD[addDays(parseISO(prevLatest.date),1).getDay()];
+      } else if(pr.dates[i]){
+        sub=WD[pr.dates[i].getDay()];
+      }
       strip.appendChild(el('<div class="slot rest"><div class="cat">&nbsp;</div><div class="nm">REST</div><div class="dt">'+sub+'</div></div>'));
       return;
     }
     var day=PROGRAM[c];
     var latest=latestFor(c);
-    var isPast = pr.lastIdx>=0 && i<=pr.lastIdx;
-    if(isPast && latest && dayDiff(parseISO(latest.date),today)<=8){
+    if(latest && dayDiff(parseISO(latest.date),today)<=5){
+      /* served this rotation — show the mark, wherever it sits in the cycle */
       sub=(latest.skipped?'✕ ':'✓ ')+WD[parseISO(latest.date).getDay()];
     } else if(pr.dates[i]){
       sub=WD[pr.dates[i].getDay()];
@@ -956,7 +972,7 @@ function buildBrief(){
   sw.children[0].addEventListener('click',function(){ state.view='list'; saveState(); renderAll(); });
   brief.appendChild(sw);
   brief.appendChild(el('<div class="swipehint">SWIPE \u2190 FOR EXERCISE 1</div>'));
-  brief.appendChild(el('<div class="storage-line briefstore">STORAGE: '+storageMode+' \u00b7 V15</div>'));
+  brief.appendChild(el('<div class="storage-line briefstore">STORAGE: '+storageMode+' \u00b7 V18</div>'));
   return brief;
 }
 function renderDeck(){
@@ -1099,24 +1115,25 @@ function seedLog(day,ex,arr){
   state.log[k]=arr.map(function(a){ return {w:a[0],r:a[1],done:true}; });
 }
 function seedHistoryOnce(){
-  if(state.seedV2) return;
-  state.seedV2=true; state.seededHistory=true;
-  /* drop setup-period skips and any earlier seed attempt */
-  state.sessions=state.sessions.filter(function(s){
-    if(s.seeded) return false;
-    if(s.skipped && s.date<='2026-07-18') return false;
-    return true;
+  if(state.seedV4) return;
+  state.seedV4=true; state.seedV3=true; state.seedV2=true; state.seededHistory=true;
+  /* rebuild: drop earlier seed attempts and setup-era stamps; keep real completed
+     sessions from today (2026-07-18) onward */
+  var real=state.sessions.filter(function(s){
+    return !s.seeded && !s.skipped && s.date>='2026-07-18';
   });
-  /* completed history (skip if a real completed entry already exists for the day) */
-  [['2026-07-15','pullA'],['2026-07-17','pushA'],['2026-07-17','legsA']].forEach(function(t){
-    var exists=state.sessions.some(function(s){ return s.day===t[1] && !s.skipped; });
-    if(!exists) state.sessions.push({day:t[1],date:t[0],week:1,skipped:false,seeded:true});
-  });
-  /* chronological order, stable ties — keeps legsA as the tail so NEXT = PULL B */
-  state.sessions=state.sessions.map(function(s,i){ s.__i=i; return s; })
-    .sort(function(a,b){ return a.date<b.date?-1:a.date>b.date?1:a.__i-b.__i; })
-    .map(function(s){ delete s.__i; return s; });
-  /* W1 logs from the screenshots */
+  /* the actual week, in actual PPL order — no tricks needed now that the
+     cycle runs Push -> Pull -> Legs */
+  var seeds=[
+    ['2026-07-13','pushA'],
+    ['2026-07-14','pullA'],
+    ['2026-07-15','legsA'],
+    ['2026-07-17','pushB']
+  ].filter(function(t){
+    return !real.some(function(s){ return s.day===t[1]; });
+  }).map(function(t){ return {day:t[1],date:t[0],week:1,skipped:false,seeded:true}; });
+  state.sessions=seeds.concat(real);
+  /* W1 logs from the screenshots (Push A = Monday, Legs A = Wednesday) */
   seedLog('pushA','sa1',[[225,8],[225,8],[225,8]]);
   seedLog('pushA','sa2',[[90,8],[75,10],[75,10]]);
   seedLog('legsA','la1',[[180,8],[180,8],[180,8],[180,8]]);
@@ -1177,7 +1194,7 @@ window.addEventListener&&window.addEventListener('resize',function(){
 });
 function renderAll(){ applyViewMode(); renderCycle(); renderLedger(); renderWeeks(); renderViewToggle(); renderPrimer(); renderCards(); }
 detectStorage(function(){
-  document.getElementById('storageLine').textContent='STORAGE: '+storageMode+' · V15';
+  document.getElementById('storageLine').textContent='STORAGE: '+storageMode+' · V18';
   loadState(function(s){
     if(s){ state=normalizeState(s); }
     seedHistoryOnce();
